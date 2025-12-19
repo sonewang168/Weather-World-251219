@@ -349,6 +349,71 @@ function handleWebRequest(data) {
     }
   }
   
+  // 只生成圖片（網頁版預覽用，不推送 LINE）
+  if (data.action === 'generateImage') {
+    try {
+      const w = data.weather;
+      const modelId = data.model || cfg.defaultModel || 'qwen-image';
+      
+      // 取得城市資訊
+      const cityInfo = getCityInfo(w.city, cfg.serpApiKey);
+      
+      // 組合 Prompt
+      const prompt = buildWeatherPrompt(w, cityInfo);
+      console.log('generateImage Prompt:', prompt);
+      
+      // AI 生圖
+      const imgUrl = generateImage(prompt, modelId, cfg);
+      console.log('AI 圖片:', imgUrl);
+      
+      // 上傳 ImgBB
+      const pubUrl = uploadImgBB(imgUrl, cfg.imgbbKey);
+      console.log('ImgBB:', pubUrl);
+      
+      // 返回 JSON
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: true,
+        imageUrl: pubUrl,
+        model: MODELS[modelId]?.name || modelId,
+        cityInfo: cityInfo
+      })).setMimeType(ContentService.MimeType.JSON);
+      
+    } catch (err) {
+      console.error(err);
+      return ContentService.createTextOutput(JSON.stringify({
+        ok: false,
+        err: err.message
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  
+  // 推送已有的圖片到 LINE（不重新生成）
+  if (data.action === 'pushExistingImage') {
+    if (!uid) return ContentService.createTextOutput('NO_USER_ID');
+    if (!cfg.lineToken) return ContentService.createTextOutput('NO_TOKEN');
+    
+    try {
+      const w = data.weather;
+      const imgUrl = data.imageUrl;
+      const time = Utilities.formatDate(new Date(), 'Asia/Taipei', 'MM/dd HH:mm');
+      
+      const text = `🌍 ${w.city} 天氣預報
+
+🌡️ ${w.temp}°C（體感 ${w.feels}°C）
+💧 濕度 ${w.humidity}% | 💨 風速 ${w.wind}m/s
+📝 ${w.description}
+
+🕐 ${time}`;
+
+      pushWithImage(uid, imgUrl, text, cfg.lineToken);
+      return ContentService.createTextOutput('OK');
+      
+    } catch (err) {
+      console.error(err);
+      return ContentService.createTextOutput('ERROR:' + err.message);
+    }
+  }
+  
   return ContentService.createTextOutput('OK');
 }
 
