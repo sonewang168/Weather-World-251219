@@ -979,8 +979,8 @@
                         <span class="img-btn-text">系統分享</span>
                     </button>
                     <button class="img-btn line" onclick="pushToLine()">
-                        <span class="img-btn-icon">💬</span>
-                        <span class="img-btn-text">推送 LINE</span>
+                        <span class="img-btn-icon">🎨</span>
+                        <span class="img-btn-text">AI 生圖推送</span>
                     </button>
                     <button class="img-btn upload" onclick="uploadAndCopy()">
                         <span class="img-btn-icon">🔗</span>
@@ -1069,7 +1069,7 @@
         if (!cfg.gasUrl) { updateImageStatus('⚠️ 請先設定 GAS URL', 'err'); return; }
         if (!cfg.lineUserId) { updateImageStatus('⚠️ 請先設定 User ID', 'err'); return; }
         
-        updateImageStatus('⏳ 推送到 LINE...', 'info');
+        updateImageStatus('⏳ 發送到 GAS 生成 AI 天氣圖...', 'info');
         
         try {
             await fetch(cfg.gasUrl, {
@@ -1078,15 +1078,14 @@
                 body: JSON.stringify({
                     action: 'pushWeather',
                     weather: currentWeather,
-                    imageBase64: generatedBase64,
                     userId: cfg.lineUserId
                 }),
                 mode: 'no-cors'
             });
             
-            updateImageStatus('✅ 已推送到 LINE！', 'ok');
+            updateImageStatus('✅ 已發送！AI 生成中，完成後推送到 LINE', 'ok');
         } catch (e) {
-            updateImageStatus('❌ 推送失敗: ' + e.message, 'err');
+            updateImageStatus('❌ 發送失敗: ' + e.message, 'err');
         }
     }
     
