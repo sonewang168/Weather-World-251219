@@ -327,6 +327,7 @@ function handleWebRequest(data) {
       
       // 推送結果
       const time = Utilities.formatDate(new Date(), 'Asia/Taipei', 'MM/dd HH:mm');
+      const sat = w.satellite || {};
       const text = `✅ ${w.city} 天氣圖生成完成！
 
 🌡️ ${w.temp}°C（體感 ${w.feels}°C）
@@ -335,6 +336,10 @@ function handleWebRequest(data) {
 
 🏙️ ${cityInfo.landmarks || ''}
 🍜 ${cityInfo.food || ''}
+
+🛰️ ${sat.name || '氣象衛星'}
+📡 ${sat.op || ''}
+📍 ${w.lat?.toFixed(2) || ''}°, ${w.lon?.toFixed(2) || ''}°
 
 🤖 ${MODELS[modelId]?.icon || ''} ${MODELS[modelId]?.name || modelId}
 🕐 ${time}`;
