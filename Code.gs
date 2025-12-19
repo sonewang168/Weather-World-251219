@@ -330,18 +330,31 @@ function handleWebRequest(data) {
       const sat = w.satellite || {};
       const text = `✅ ${w.city} 天氣圖生成完成！
 
-🌡️ ${w.temp}°C（體感 ${w.feels}°C）
-💧 濕度 ${w.humidity}% | 💨 風速 ${w.wind}m/s
-📝 ${w.description}
+━━━━━━ 🌡️ 天氣資訊 ━━━━━━
+🌡️ 溫度：${w.temp}°C
+🤒 體感：${w.feels}°C
+💧 濕度：${w.humidity}%
+💨 風速：${w.wind} m/s
+👁️ 能見度：${w.visibility || '--'}
+☁️ 雲量：${w.clouds != null ? w.clouds + '%' : '--'}
+📝 天氣：${w.description}
+${w.sunrise ? '🌅 日出：' + w.sunrise : ''}
+${w.sunset ? '🌇 日落：' + w.sunset : ''}
 
-🏙️ ${cityInfo.landmarks || ''}
+━━━━━━ 🏙️ 城市特色 ━━━━━━
+🏛️ ${cityInfo.landmarks || ''}
 🍜 ${cityInfo.food || ''}
 
-🛰️ ${sat.name || '氣象衛星'}
-📡 ${sat.op || ''}
-📍 ${w.lat?.toFixed(2) || ''}°, ${w.lon?.toFixed(2) || ''}°
+━━━━━━ 🛰️ 衛星資訊 ━━━━━━
+📡 衛星：${sat.name || '氣象衛星'}
+🏢 機構：${sat.op || '--'}
+📍 位置：${sat.pos || '--'}
+🌐 軌道：${sat.type || '--'}
+🧭 經緯：${w.lat?.toFixed(4) || '--'}°, ${w.lon?.toFixed(4) || '--'}°
 
+━━━━━━━━━━━━━━━━━━━━
 🤖 ${MODELS[modelId]?.icon || ''} ${MODELS[modelId]?.name || modelId}
+📊 ${w.apiSource || 'Weather API'}
 🕐 ${time}`;
 
       pushWithImage(uid, pubUrl, text, cfg.lineToken);
@@ -401,13 +414,30 @@ function handleWebRequest(data) {
       const w = data.weather;
       const imgUrl = data.imageUrl;
       const time = Utilities.formatDate(new Date(), 'Asia/Taipei', 'MM/dd HH:mm');
+      const sat = w.satellite || {};
       
       const text = `🌍 ${w.city} 天氣預報
 
-🌡️ ${w.temp}°C（體感 ${w.feels}°C）
-💧 濕度 ${w.humidity}% | 💨 風速 ${w.wind}m/s
-📝 ${w.description}
+━━━━━━ 🌡️ 天氣資訊 ━━━━━━
+🌡️ 溫度：${w.temp}°C
+🤒 體感：${w.feels}°C
+💧 濕度：${w.humidity}%
+💨 風速：${w.wind} m/s
+👁️ 能見度：${w.visibility || '--'}
+☁️ 雲量：${w.clouds != null ? w.clouds + '%' : '--'}
+📝 天氣：${w.description}
+${w.sunrise ? '🌅 日出：' + w.sunrise : ''}
+${w.sunset ? '🌇 日落：' + w.sunset : ''}
 
+━━━━━━ 🛰️ 衛星資訊 ━━━━━━
+📡 衛星：${sat.name || '氣象衛星'}
+🏢 機構：${sat.op || '--'}
+📍 位置：${sat.pos || '--'}
+🌐 軌道：${sat.type || '--'}
+🧭 經緯：${w.lat?.toFixed(4) || '--'}°, ${w.lon?.toFixed(4) || '--'}°
+
+━━━━━━━━━━━━━━━━━━━━
+📊 ${w.apiSource || 'Weather API'}
 🕐 ${time}`;
 
       pushWithImage(uid, imgUrl, text, cfg.lineToken);
