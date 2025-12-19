@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>🌍 世界天氣預報</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌤️</text></svg>">
+    <style>
+        :root { --primary:#4facfe; --secondary:#00f2fe; --glass:rgba(255,255,255,0.08); --border:rgba(255,255,255,0.15); }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif; min-height:100vh; color:#fff; }
+        
+        /* 背景 */
+        .bg { position:fixed; top:0; left:0; width:100%; height:100%; z-index:-1; transition:background 1.5s; }
+        .bg.sunny { background:linear-gradient(180deg,#4facfe 0%,#00f2fe 50%,#f6d365 100%); }
+        .bg.cloudy { background:linear-gradient(180deg,#606c88 0%,#3f4c6b 50%,#2c3e50 100%); }
+        .bg.rainy { background:linear-gradient(180deg,#373b44 0%,#4286f4 50%,#373b44 100%); }
+        .bg.night { background:linear-gradient(180deg,#0f0c29 0%,#302b63 50%,#24243e 100%); }
+        .bg.default { background:linear-gradient(180deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%); }
+        
+        /* 粒子 */
+        .particles { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden; }
+        .particle { position:absolute; width:4px; height:4px; background:rgba(255,255,255,0.3); border-radius:50%; animation:float 15s infinite linear; }
+        @keyframes float { 0%{transform:translateY(100vh);opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{transform:translateY(-100vh);opacity:0} }
+        
+        /* 開機動畫 */
+        #splash { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#667eea,#764ba2,#f093fb); display:flex; flex-direction:column; justify-content:center; align-items:center; z-index:9999; transition:opacity 0.8s,visibility 0.8s; }
+        #splash.hide { opacity:0; visibility:hidden; }
+        .splash-logo { position:relative; width:150px; height:150px; display:flex; justify-content:center; align-items:center; }
+        .splash-char { font-size:80px; font-weight:900; color:#fff; text-shadow:0 0 60px rgba(255,255,255,0.8); animation:spin3d 3s ease-in-out infinite; }
+        @keyframes spin3d { 0%{transform:rotateY(0) scale(1)} 50%{transform:rotateY(180deg) scale(1.1)} 100%{transform:rotateY(360deg) scale(1)} }
+        .splash-glow { position:absolute; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle,rgba(255,255,255,0.4),transparent 70%); animation:pulse 2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100%{transform:scale(1);opacity:0.5} 50%{transform:scale(1.3);opacity:0.8} }
+        .splash-ring { position:absolute; width:180px; height:180px; border:3px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:rotate 1.5s linear infinite; }
+        @keyframes rotate { to{transform:rotate(360deg)} }
+        .splash-title { font-size:28px; font-weight:700; margin-top:30px; background:linear-gradient(90deg,#fff,#f0abfc,#fff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .splash-sub { font-size:14px; color:rgba(255,255,255,0.8); margin-top:10px; }
+        .splash-bar { margin-top:40px; width:180px; height:4px; background:rgba(255,255,255,0.2); border-radius:2px; overflow:hidden; }
+        .splash-bar::after { content:''; display:block; width:40%; height:100%; background:linear-gradient(90deg,transparent,#fff,transparent); animation:slide 1.2s ease-in-out infinite; }
+        @keyframes slide { 0%{transform:translateX(-100%)} 100%{transform:translateX(350%)} }
+        
+        /* Header */
+        .header { position:fixed; top:0; left:0; right:0; z-index:100; padding:12px 16px; background:rgba(0,0,0,0.3); backdrop-filter:blur(20px); border-bottom:1px solid rgba(255,255,255,0.1); }
+        .header-inner { max-width:600px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; }
+        .header-title { display:flex; align-items:center; gap:8px; font-size:18px; font-weight:600; }
+        .header-time { font-size:12px; color:rgba(255,255,255,0.7); }
+        
+        /* 主容器 */
+        .app { position:relative; z-index:1; min-height:100vh; padding:60px 16px 100px; }
+        
+        /* 搜尋區 */
+        .search-sec { max-width:600px; margin:0 auto 20px; }
+        .search-box { display:flex; gap:10px; position:relative; }
+        .search-input { flex:1; padding:14px 18px; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:16px; color:#fff; font-size:16px; outline:none; }
+        .search-input:focus { border-color:var(--primary); box-shadow:0 0 20px rgba(79,172,254,0.3); }
+        .search-input::placeholder { color:rgba(255,255,255,0.4); }
+        .search-btn { padding:14px 24px; background:linear-gradient(135deg,var(--primary),var(--secondary)); border:none; border-radius:16px; color:#fff; font-size:16px; font-weight:600; cursor:pointer; }
+        .search-btn:disabled { opacity:0.6; }
+        
+        /* 搜尋建議 */
+        .suggestions { position:absolute; top:100%; left:0; right:60px; margin-top:8px; background:rgba(30,30,50,0.95); backdrop-filter:blur(20px); border:1px solid var(--border); border-radius:16px; max-height:280px; overflow-y:auto; display:none; z-index:50; }
+        .suggestions.show { display:block; }
+        .sug-item { padding:14px 18px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .sug-item:hover { background:rgba(79,172,254,0.2); }
+        .sug-city { font-size:15px; font-weight:500; }
+        .sug-country { font-size:12px; color:rgba(255,255,255,0.6); margin-top:2px; }
+        .sug-coords { font-size:10px; color:var(--primary); margin-top:4px; font-family:monospace; }
+        
+        /* API 選擇 */
+        .api-sel { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+        .api-btn { padding:8px 14px; background:var(--glass); border:1px solid var(--border); border-radius:20px; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer; }
+        .api-btn:hover { background:rgba(255,255,255,0.15); }
+        .api-btn.active { background:linear-gradient(135deg,var(--primary),var(--secondary)); color:#fff; border-color:transparent; }
+        
+        /* 快速城市 */
+        .quick-sec { margin-top:16px; }
+        .quick-title { font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:10px; }
+        .quick-list { display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; }
+        .quick-list::-webkit-scrollbar { height:4px; }
+        .quick-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:2px; }
+        .quick-btn { flex-shrink:0; padding:10px 16px; background:var(--glass); border:1px solid var(--border); border-radius:20px; color:rgba(255,255,255,0.7); font-size:13px; cursor:pointer; white-space:nowrap; }
+        .quick-btn:hover { background:rgba(255,255,255,0.15); color:#fff; border-color:var(--primary); }
+        
+        /* 玻璃卡片 */
+        .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); border-radius:24px; padding:24px; margin-bottom:16px; max-width:600px; margin-left:auto; margin-right:auto; }
+        
+        /* 天氣主卡片 */
+        .weather-main { text-align:center; padding:30px 20px; }
+        .w-city { font-size:28px; font-weight:600; }
+        .w-country { font-size:14px; color:rgba(255,255,255,0.7); margin-bottom:20px; }
+        .w-icon { font-size:100px; line-height:1; margin:20px 0; filter:drop-shadow(0 10px 30px rgba(0,0,0,0.3)); animation:wfloat 3s ease-in-out infinite; }
+        @keyframes wfloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+        .w-temp { font-size:72px; font-weight:200; line-height:1; margin-bottom:10px; }
+        .w-temp .unit { font-size:36px; vertical-align:super; }
+        .w-desc { font-size:20px; color:rgba(255,255,255,0.7); margin-bottom:10px; }
+        .w-feels { font-size:14px; color:rgba(255,255,255,0.7); }
+        
+        /* 詳細 */
+        .details { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+        .detail { background:rgba(255,255,255,0.05); border-radius:16px; padding:16px; text-align:center; }
+        .detail-icon { font-size:24px; margin-bottom:8px; }
+        .detail-label { font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px; }
+        .detail-val { font-size:18px; font-weight:600; }
+        
+        /* 日出日落 */
+        .sun-row { display:flex; justify-content:space-around; padding:20px 0; }
+        .sun-item { text-align:center; }
+        .sun-icon { font-size:36px; margin-bottom:8px; }
+        .sun-time { font-size:18px; font-weight:600; }
+        .sun-label { font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px; }
+        
+        /* 衛星 */
+        .sat-card { position:relative; overflow:hidden; }
+        .sat-card::before { content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%; background:conic-gradient(from 0deg,transparent,rgba(79,172,254,0.1),transparent); animation:orbit 10s linear infinite; }
+        @keyframes orbit { to{transform:rotate(360deg)} }
+        .sat-content { position:relative; z-index:1; }
+        .sat-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+        .sat-icon { font-size:32px; animation:satpulse 2s ease-in-out infinite; }
+        @keyframes satpulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
+        .sat-title { font-size:16px; font-weight:600; }
+        .sat-sub { font-size:12px; color:rgba(255,255,255,0.6); }
+        .sat-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.1); }
+        .sat-row:last-child { border-bottom:none; }
+        .sat-label { font-size:13px; color:rgba(255,255,255,0.6); }
+        .sat-val { font-size:14px; font-weight:500; color:var(--primary); }
+        .coords { display:flex; gap:20px; justify-content:center; margin-top:16px; padding:16px; background:rgba(0,0,0,0.2); border-radius:12px; }
+        .coord { text-align:center; }
+        .coord-label { font-size:10px; color:rgba(255,255,255,0.6); }
+        .coord-val { font-size:16px; font-weight:600; font-family:monospace; color:var(--secondary); }
+        
+        /* API來源 */
+        .api-src { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; font-size:11px; color:rgba(255,255,255,0.6); }
+        .api-badge { padding:4px 10px; background:rgba(79,172,254,0.2); border-radius:10px; color:var(--primary); font-weight:500; }
+        .update-time { text-align:center; font-size:12px; color:rgba(255,255,255,0.6); margin-top:16px; }
+        
+        /* 生成圖片按鈕 */
+        .gen-btn { display:block; width:calc(100% - 40px); max-width:560px; margin:20px auto; padding:18px; background:linear-gradient(135deg,#667eea,#764ba2); border:none; border-radius:30px; color:#fff; font-size:18px; font-weight:700; cursor:pointer; box-shadow:0 4px 20px rgba(102,126,234,0.5); transition:all 0.3s; }
+        .gen-btn:hover { transform:scale(1.02); box-shadow:0 6px 25px rgba(102,126,234,0.6); }
+        .gen-btn:disabled { opacity:0.6; }
+        
+        /* 圖片預覽面板 */
+        .image-panel { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); z-index:300; justify-content:center; align-items:center; padding:20px; }
+        .image-panel.show { display:flex; }
+        .image-panel-box { width:100%; max-width:700px; max-height:90vh; background:rgba(20,20,40,0.98); border-radius:24px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; }
+        .image-panel-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:linear-gradient(135deg,#667eea,#764ba2); }
+        .image-panel-header span { font-size:18px; font-weight:600; color:#fff; }
+        .image-panel-close { width:36px; height:36px; background:rgba(255,255,255,0.2); border:none; border-radius:50%; color:#fff; font-size:20px; cursor:pointer; }
+        .image-preview-wrap { flex:1; overflow:auto; padding:20px; display:flex; justify-content:center; align-items:center; background:#0a0a15; }
+        .image-preview { max-width:100%; max-height:400px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+        .image-actions { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:20px; background:rgba(255,255,255,0.03); }
+        .img-btn { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px; border:none; border-radius:16px; cursor:pointer; transition:all 0.2s; }
+        .img-btn:hover { transform:scale(1.03); }
+        .img-btn-icon { font-size:28px; }
+        .img-btn-text { font-size:13px; font-weight:600; }
+        .img-btn.download { background:linear-gradient(135deg,#4facfe,#00f2fe); color:#fff; }
+        .img-btn.share { background:linear-gradient(135deg,#f093fb,#f5576c); color:#fff; }
+        .img-btn.line { background:linear-gradient(135deg,#06c755,#00a040); color:#fff; }
+        .img-btn.upload { background:linear-gradient(135deg,#ff9f0a,#ff6b35); color:#fff; }
+        .image-status { padding:12px 20px; font-size:13px; text-align:center; display:none; }
+        .image-status.show { display:block; }
+        .image-status.ok { background:rgba(48,209,88,0.15); color:#30d158; }
+        .image-status.err { background:rgba(255,55,95,0.15); color:#ff375f; }
+        .image-status.info { background:rgba(79,172,254,0.15); color:#4facfe; }
+        
+        /* 載入 */
+        .loading { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(5px); z-index:200; justify-content:center; align-items:center; flex-direction:column; }
+        .loading.show { display:flex; }
+        .spinner { width:60px; height:60px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--primary); border-radius:50%; animation:rotate 1s linear infinite; }
+        .loading-text { margin-top:16px; font-size:14px; color:rgba(255,255,255,0.7); }
+        
+        /* Toast */
+        #toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(100px); padding:14px 28px; background:rgba(0,0,0,0.8); backdrop-filter:blur(10px); border-radius:30px; color:#fff; font-size:14px; z-index:300; opacity:0; transition:all 0.3s; white-space:nowrap; }
+        #toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+        
+        /* 底部導航 */
+        .nav { position:fixed; bottom:0; left:0; right:0; padding:12px 16px 24px; background:rgba(0,0,0,0.4); backdrop-filter:blur(20px); border-top:1px solid rgba(255,255,255,0.1); z-index:100; }
+        .nav-inner { max-width:600px; margin:0 auto; display:flex; justify-content:space-around; }
+        .nav-btn { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 16px; background:none; border:none; color:rgba(255,255,255,0.6); font-size:10px; cursor:pointer; }
+        .nav-btn .icon { font-size:24px; }
+        .nav-btn.active,.nav-btn:hover { color:var(--primary); }
+        
+        /* ========== 設定面板（6區塊）========== */
+        .settings { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(10px); z-index:250; justify-content:center; align-items:center; padding:20px; }
+        .settings.show { display:flex; }
+        .settings-box { width:100%; max-width:550px; max-height:85vh; overflow-y:auto; background:rgba(20,20,40,0.98); border-radius:24px; padding:24px; border:1px solid rgba(255,255,255,0.1); }
+        .settings-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; position:sticky; top:0; background:rgba(20,20,40,0.98); padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); }
+        .settings-title { font-size:20px; font-weight:600; }
+        .settings-close { width:36px; height:36px; background:rgba(255,255,255,0.1); border:none; border-radius:50%; color:#fff; font-size:20px; cursor:pointer; }
+        
+        /* 認證卡片 */
+        .auth-card { background:rgba(255,255,255,0.03); border-radius:16px; padding:18px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.08); }
+        .auth-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08); }
+        .auth-header h3 { font-size:14px; font-weight:600; }
+        .auth-tag { font-size:9px; padding:3px 8px; border-radius:4px; margin-left:auto; }
+        .auth-tag.free { background:#30d158; color:#000; }
+        .auth-tag.need { background:#ff9f0a; color:#000; }
+        .auth-field { margin-bottom:14px; }
+        .auth-field:last-child { margin-bottom:0; }
+        .field-top { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .field-top label { font-size:13px; font-weight:500; }
+        .field-top .badge { font-size:9px; padding:2px 6px; border-radius:4px; }
+        .field-top .badge.req { background:#ff375f; color:#fff; }
+        .field-top .badge.opt { background:#636366; color:#fff; }
+        .field-top .mark { font-size:10px; color:#30d158; margin-left:auto; }
+        .auth-input { width:100%; padding:12px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:10px; color:#fff; font-size:14px; }
+        .auth-input:focus { outline:none; border-color:var(--primary); }
+        .auth-hint { font-size:10px; color:rgba(255,255,255,0.5); margin:6px 0 10px; line-height:1.5; }
+        .auth-hint a { color:var(--primary); }
+        .auth-btns { display:flex; gap:8px; }
+        .auth-btn { flex:1; padding:10px; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
+        .auth-btn:disabled { opacity:0.5; }
+        .auth-btn.save { background:linear-gradient(135deg,#30d158,#28a745); color:#fff; }
+        .auth-btn.clear { background:rgba(255,55,95,0.15); color:#ff375f; border:1px solid rgba(255,55,95,0.3); }
+        .auth-btn.test-line { width:100%; padding:14px; background:linear-gradient(135deg,#06c755,#00a040); color:#fff; margin-top:14px; font-size:14px; }
+        .auth-btn.test-line:disabled { opacity:0.6; }
+        
+        /* 全域操作按鈕 */
+        .global-actions { background:rgba(79,172,254,0.1); border-color:rgba(79,172,254,0.3); }
+        .auth-btns-global { display:flex; gap:12px; }
+        .auth-btn.save-all { flex:1; padding:16px; background:linear-gradient(135deg,#4facfe,#00f2fe); color:#fff; font-size:15px; font-weight:700; }
+        .auth-btn.clear-all { flex:1; padding:16px; background:rgba(255,55,95,0.2); color:#ff375f; border:2px solid rgba(255,55,95,0.4); font-size:15px; font-weight:700; }
+        .auth-btn.clear-all:hover { background:rgba(255,55,95,0.3); }
+        
+        .auth-status { font-size:11px; padding:8px 12px; border-radius:8px; margin-top:8px; display:none; text-align:center; }
+        .auth-status.show { display:block; }
+        .auth-status.ok { background:rgba(48,209,88,0.15); color:#30d158; }
+        .auth-status.err { background:rgba(255,55,95,0.15); color:#ff375f; }
+        .auth-status.info { background:rgba(79,172,254,0.15); color:#4facfe; }
+        
+        /* 免費標示 */
+        .free-box { background:rgba(48,209,88,0.1); border:1px solid rgba(48,209,88,0.3); border-radius:12px; padding:16px; text-align:center; }
+        .free-box .ic { font-size:28px; }
+        .free-box .tx { font-size:13px; color:#30d158; margin-top:6px; }
+        .free-box .stx { font-size:10px; color:rgba(255,255,255,0.5); margin-top:4px; }
+        
+        /* 歡迎 */
+        .welcome { text-align:center; padding:60px 20px; }
+        .welcome-icon { font-size:80px; margin-bottom:20px; animation:wfloat 3s ease-in-out infinite; }
+        .welcome-title { font-size:24px; font-weight:600; margin-bottom:10px; }
+        .welcome-sub { font-size:14px; color:rgba(255,255,255,0.6); line-height:1.6; }
+        
+        @media(max-width:480px) { .w-temp{font-size:60px} .w-icon{font-size:80px} .w-city{font-size:24px} }
+    </style>
+</head>
+<body>
+    <!-- 開機動畫 -->
+    <div id="splash">
+        <div class="splash-logo">
+            <div class="splash-glow"></div>
+            <div class="splash-ring"></div>
+            <div class="splash-char">天</div>
+        </div>
+        <div class="splash-title">世界天氣預報</div>
+        <div class="splash-sub">World Weather Forecast</div>
+        <div class="splash-bar"></div>
+    </div>
+
+    <div class="bg default" id="bg"></div>
+    <div class="particles" id="particles"></div>
+
+    <header class="header">
+        <div class="header-inner">
+            <div class="header-title"><span>🌍</span><span>世界天氣預報</span></div>
+            <div class="header-time" id="time">--:--</div>
+        </div>
+    </header>
+
+    <div class="app">
+        <section class="search-sec">
+            <div class="search-box">
+                <input type="text" class="search-input" id="cityInput" placeholder="輸入城市名稱（支援全球搜尋）" autocomplete="off">
+                <button class="search-btn" onclick="search()">🔍</button>
+                <div class="suggestions" id="sug"></div>
+            </div>
+            
+            <div class="api-sel">
+                <button class="api-btn active" data-api="auto" onclick="setApi('auto')">🤖 自動</button>
+                <button class="api-btn" data-api="meteo" onclick="setApi('meteo')">🌐 Open-Meteo</button>
+                <button class="api-btn" data-api="cwa" onclick="setApi('cwa')">🇹🇼 氣象署</button>
+                <button class="api-btn" data-api="weatherapi" onclick="setApi('weatherapi')">⚡ WeatherAPI</button>
+                <button class="api-btn" data-api="owm" onclick="setApi('owm')">🌤️ OWM</button>
+            </div>
+            
+            <div class="quick-sec">
+                <div class="quick-title">⚡ 快速選擇</div>
+                <div class="quick-list">
+                    <button class="quick-btn" onclick="quick('台北')">🇹🇼 台北</button>
+                    <button class="quick-btn" onclick="quick('高雄')">🇹🇼 高雄</button>
+                    <button class="quick-btn" onclick="quick('東京')">🇯🇵 東京</button>
+                    <button class="quick-btn" onclick="quick('首爾')">🇰🇷 首爾</button>
+                    <button class="quick-btn" onclick="quick('香港')">🇭🇰 香港</button>
+                    <button class="quick-btn" onclick="quick('新加坡')">🇸🇬 新加坡</button>
+                    <button class="quick-btn" onclick="quick('紐約')">🇺🇸 紐約</button>
+                    <button class="quick-btn" onclick="quick('倫敦')">🇬🇧 倫敦</button>
+                    <button class="quick-btn" onclick="quick('巴黎')">🇫🇷 巴黎</button>
+                    <button class="quick-btn" onclick="quick('雪梨')">🇦🇺 雪梨</button>
+                </div>
+            </div>
+        </section>
+
+        <div id="result">
+            <div class="card welcome">
+                <div class="welcome-icon">🌤️</div>
+                <div class="welcome-title">查詢世界各地天氣</div>
+                <div class="welcome-sub">支援全球城市自由搜尋<br>輸入城市名稱或點擊快速按鈕</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">正在取得天氣...</div>
+    </div>
+
+    <div id="toast"></div>
+
+    <nav class="nav">
+        <div class="nav-inner">
+            <button class="nav-btn active" onclick="showPage('home',this)"><span class="icon">🏠</span><span>首頁</span></button>
+            <button class="nav-btn" onclick="showPage('settings',this)"><span class="icon">⚙️</span><span>設定</span></button>
+        </div>
+    </nav>
+
+    <!-- ========== 設定面板（6 個認證區塊）========== -->
+    <div class="settings" id="settings">
+        <div class="settings-box">
+            <div class="settings-header">
+                <div class="settings-title">⚙️ API 認證設定</div>
+                <button class="settings-close" onclick="closeSetting()">✕</button>
+            </div>
+
+            <!-- 1. LINE Bot 認證 -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>🤖 LINE Bot 認證</h3>
+                    <span class="auth-tag need">需設定</span>
+                </div>
+                
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>GAS 部署 URL</label>
+                        <span class="badge req">必填</span>
+                        <span class="mark" id="gasUrl_m"></span>
+                    </div>
+                    <input type="text" class="auth-input" id="gasUrl" placeholder="https://script.google.com/macros/s/...">
+                    <div class="auth-hint">部署 Code.gs 後取得的網址</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('gasUrl')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('gasUrl')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="gasUrl_s"></div>
+                </div>
+
+                <div class="auth-hint" style="background:rgba(48,209,88,0.1);padding:12px;border-radius:8px;margin-bottom:12px;border:1px solid rgba(48,209,88,0.3)">
+                    ⚠️ <strong>LINE Token 請在 GAS 設定頁面儲存</strong><br>
+                    <span style="font-size:10px;color:#8e8e93">開啟 GAS 部署網址 → 填入 Channel Access Token → 儲存</span>
+                </div>
+
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>User ID（推送對象）</label>
+                        <span class="badge req">必填</span>
+                        <span class="mark" id="lineUserId_m"></span>
+                    </div>
+                    <input type="text" class="auth-input" id="lineUserId" placeholder="U1234567890abcdef...">
+                    <div class="auth-hint">對 Bot 傳送「我的ID」或「/myid」取得</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('lineUserId')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('lineUserId')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="lineUserId_s"></div>
+                </div>
+
+                <button class="auth-btn test-line" onclick="testLineConnection()">📤 發送檢測回報到 LINE</button>
+                <div class="auth-status" id="testLine_s"></div>
+            </div>
+
+            <!-- 2. Open-Meteo -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>🌐 Open-Meteo</h3>
+                    <span class="auth-tag free">免費免Key</span>
+                </div>
+                <div class="free-box">
+                    <div class="ic">✅</div>
+                    <div class="tx">自動可用，無需設定！</div>
+                    <div class="stx">全球天氣資料，完全免費，無限制</div>
+                </div>
+            </div>
+
+            <!-- 3. 台灣氣象署 CWA -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>🇹🇼 台灣氣象署 CWA</h3>
+                    <span class="auth-tag need">需申請</span>
+                </div>
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>CWA 授權碼</label>
+                        <span class="badge opt">選填</span>
+                        <span class="mark" id="cwaKey_m"></span>
+                    </div>
+                    <input type="password" class="auth-input" id="cwaKey" placeholder="CWA-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
+                    <div class="auth-hint"><a href="https://opendata.cwa.gov.tw/user/authkey" target="_blank">氣象資料開放平台</a> → 登入/註冊 → 取得授權碼<br>台灣地區最準確的氣象資料</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('cwaKey')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('cwaKey')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="cwaKey_s"></div>
+                </div>
+            </div>
+
+            <!-- 4. WeatherAPI -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>⚡ WeatherAPI</h3>
+                    <span class="auth-tag need">需申請</span>
+                </div>
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>API Key</label>
+                        <span class="badge opt">選填</span>
+                        <span class="mark" id="weatherApiKey_m"></span>
+                    </div>
+                    <input type="password" class="auth-input" id="weatherApiKey" placeholder="輸入 API Key">
+                    <div class="auth-hint"><a href="https://www.weatherapi.com/" target="_blank">WeatherAPI.com</a> → Sign Up → 取得 API Key<br>免費方案：100 萬次/月</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('weatherApiKey')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('weatherApiKey')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="weatherApiKey_s"></div>
+                </div>
+            </div>
+
+            <!-- 5. OpenWeatherMap -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>🌤️ OpenWeatherMap</h3>
+                    <span class="auth-tag need">需申請</span>
+                </div>
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>API Key</label>
+                        <span class="badge opt">選填</span>
+                        <span class="mark" id="owmKey_m"></span>
+                    </div>
+                    <input type="password" class="auth-input" id="owmKey" placeholder="輸入 API Key">
+                    <div class="auth-hint"><a href="https://openweathermap.org/api" target="_blank">OpenWeatherMap</a> → Sign Up → API Keys<br>免費方案：1,000 次/日</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('owmKey')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('owmKey')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="owmKey_s"></div>
+                </div>
+            </div>
+
+            <!-- 6. ImgBB -->
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h3>🖼️ ImgBB 圖床</h3>
+                    <span class="auth-tag need">需申請</span>
+                </div>
+                <div class="auth-field">
+                    <div class="field-top">
+                        <label>API Key</label>
+                        <span class="badge opt">選填</span>
+                        <span class="mark" id="imgbbKey_m"></span>
+                    </div>
+                    <input type="password" class="auth-input" id="imgbbKey" placeholder="輸入 API Key">
+                    <div class="auth-hint"><a href="https://api.imgbb.com/" target="_blank">ImgBB API</a> → Get API Key<br>用於 LINE 推送天氣截圖（選用）</div>
+                    <div class="auth-btns">
+                        <button class="auth-btn save" onclick="saveKey('imgbbKey')">💾 儲存</button>
+                        <button class="auth-btn clear" onclick="clearKey('imgbbKey')">🗑️ 清除</button>
+                    </div>
+                    <div class="auth-status" id="imgbbKey_s"></div>
+                </div>
+            </div>
+
+            <!-- 全域操作按鈕 -->
+            <div class="auth-card global-actions">
+                <div class="auth-btns-global">
+                    <button class="auth-btn save-all" onclick="saveAllKeys()">💾 儲存所有設定</button>
+                    <button class="auth-btn clear-all" onclick="clearAllKeys()">🗑️ 一鍵清除所有</button>
+                </div>
+                <div class="auth-status" id="global_s"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+    // ========== 全域變數 ==========
+    let currentApi = 'auto';
+    let currentWeather = null;
+    let searchTimer = null;
+    
+    // 設定 Keys
+    const KEYS = ['gasUrl', 'lineUserId', 'cwaKey', 'weatherApiKey', 'owmKey', 'imgbbKey'];
+    let cfg = {};
+    
+    // 快速城市
+    const QUICK = {
+        '台北':{lat:25.0330,lon:121.5654,country:'台灣'},
+        '高雄':{lat:22.6273,lon:120.3014,country:'台灣'},
+        '台中':{lat:24.1477,lon:120.6736,country:'台灣'},
+        '台南':{lat:22.9998,lon:120.2270,country:'台灣'},
+        '東京':{lat:35.6762,lon:139.6503,country:'日本'},
+        '大阪':{lat:34.6937,lon:135.5023,country:'日本'},
+        '首爾':{lat:37.5665,lon:126.9780,country:'韓國'},
+        '香港':{lat:22.3193,lon:114.1694,country:'香港'},
+        '新加坡':{lat:1.3521,lon:103.8198,country:'新加坡'},
+        '曼谷':{lat:13.7563,lon:100.5018,country:'泰國'},
+        '紐約':{lat:40.7128,lon:-74.0060,country:'美國'},
+        '洛杉磯':{lat:34.0522,lon:-118.2437,country:'美國'},
+        '倫敦':{lat:51.5074,lon:-0.1278,country:'英國'},
+        '巴黎':{lat:48.8566,lon:2.3522,country:'法國'},
+        '雪梨':{lat:-33.8688,lon:151.2093,country:'澳洲'}
+    };
+    
+    const ICONS = {'Clear':'☀️','Sunny':'☀️','Clouds':'☁️','Cloudy':'☁️','Overcast':'☁️','Partly cloudy':'⛅','Rain':'🌧️','Light rain':'🌦️','Heavy rain':'⛈️','Drizzle':'🌦️','Thunderstorm':'⛈️','Snow':'❄️','Fog':'🌫️','Mist':'🌫️','晴':'☀️','多雲':'⛅','陰':'☁️','雨':'🌧️','default':'🌤️'};
+    
+    function getSatellite(lon) {
+        if(lon>=120&&lon<=150) return {name:'向日葵9號 Himawari-9',op:'日本氣象廳 JMA',pos:'140.7°E',type:'靜止軌道'};
+        if(lon>=70&&lon<120) return {name:'風雲四號B FY-4B',op:'中國氣象局 CMA',pos:'133°E',type:'靜止軌道'};
+        if(lon>=-20&&lon<70) return {name:'Meteosat-11',op:'EUMETSAT',pos:'0°',type:'靜止軌道'};
+        if(lon>=-180&&lon<-100) return {name:'GOES-18 West',op:'NOAA',pos:'137.2°W',type:'靜止軌道'};
+        if(lon>=-100&&lon<-20) return {name:'GOES-16 East',op:'NOAA',pos:'75.2°W',type:'靜止軌道'};
+        return {name:'NOAA-20/21',op:'NOAA',pos:'極軌衛星',type:'極軌道'};
+    }
+    
+    // ========== 初始化 ==========
+    document.addEventListener('DOMContentLoaded', () => {
+        loadAllKeys();
+        setTimeout(() => document.getElementById('splash').classList.add('hide'), 2500);
+        createParticles();
+        updateTime(); setInterval(updateTime, 1000);
+        
+        const inp = document.getElementById('cityInput');
+        inp.addEventListener('keypress', e => { if(e.key==='Enter') search(); });
+        inp.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => searchGeo(inp.value.trim()), 300);
+        });
+        inp.addEventListener('blur', () => setTimeout(() => document.getElementById('sug').classList.remove('show'), 200));
+    });
+    
+    function createParticles() {
+        const c = document.getElementById('particles');
+        for(let i=0;i<30;i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = Math.random()*100+'%';
+            p.style.animationDuration = (10+Math.random()*20)+'s';
+            p.style.animationDelay = Math.random()*10+'s';
+            p.style.width = p.style.height = (2+Math.random()*4)+'px';
+            c.appendChild(p);
+        }
+    }
+    
+    function updateTime() {
+        const d = new Date();
+        document.getElementById('time').textContent = d.toLocaleDateString('zh-TW',{month:'short',day:'numeric',weekday:'short'})+' '+d.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    }
+    
+    // ========== 設定管理（獨立儲存/清除）==========
+    function loadAllKeys() {
+        KEYS.forEach(k => {
+            cfg[k] = localStorage.getItem('weather_' + k) || '';
+            document.getElementById(k).value = cfg[k];
+            document.getElementById(k + '_m').textContent = cfg[k] ? '✓ 已設定' : '';
+        });
+    }
+    
+    function saveKey(key) {
+        const val = document.getElementById(key).value.trim();
+        const status = document.getElementById(key + '_s');
+        const mark = document.getElementById(key + '_m');
+        
+        localStorage.setItem('weather_' + key, val);
+        cfg[key] = val;
+        
+        status.textContent = val ? '✅ 已儲存' : '✅ 已清空';
+        status.className = 'auth-status show ok';
+        mark.textContent = val ? '✓ 已設定' : '';
+        
+        setTimeout(() => status.className = 'auth-status', 2500);
+        toast('💾 ' + key + ' 已儲存');
+    }
+    
+    function clearKey(key) {
+        if (!confirm('確定要清除此設定嗎？')) return;
+        
+        document.getElementById(key).value = '';
+        localStorage.removeItem('weather_' + key);
+        cfg[key] = '';
+        
+        const status = document.getElementById(key + '_s');
+        const mark = document.getElementById(key + '_m');
+        
+        status.textContent = '🗑️ 已清除';
+        status.className = 'auth-status show ok';
+        mark.textContent = '';
+        
+        setTimeout(() => status.className = 'auth-status', 2000);
+    }
+    
+    // 儲存所有設定
+    function saveAllKeys() {
+        const status = document.getElementById('global_s');
+        let count = 0;
+        
+        KEYS.forEach(k => {
+            const val = document.getElementById(k).value.trim();
+            localStorage.setItem('weather_' + k, val);
+            cfg[k] = val;
+            document.getElementById(k + '_m').textContent = val ? '✓ 已設定' : '';
+            if (val) count++;
+        });
+        
+        status.textContent = `✅ 已儲存所有設定（${count}/${KEYS.length} 項已填寫）`;
+        status.className = 'auth-status show ok';
+        toast('💾 已儲存所有設定');
+        
+        setTimeout(() => status.className = 'auth-status', 3000);
+    }
+    
+    // 一鍵清除所有
+    function clearAllKeys() {
+        if (!confirm('⚠️ 確定要清除所有認證資料嗎？\n\n此操作無法復原！')) return;
+        if (!confirm('🚨 再次確認：真的要清除全部嗎？')) return;
+        
+        const status = document.getElementById('global_s');
+        
+        KEYS.forEach(k => {
+            document.getElementById(k).value = '';
+            localStorage.removeItem('weather_' + k);
+            cfg[k] = '';
+            document.getElementById(k + '_m').textContent = '';
+        });
+        
+        status.textContent = '🗑️ 已清除所有認證資料';
+        status.className = 'auth-status show ok';
+        toast('🗑️ 已清除所有認證資料');
+        
+        setTimeout(() => status.className = 'auth-status', 3000);
+    }
+    
+    // 測試 LINE 連線
+    async function testLineConnection() {
+        if (!cfg.gasUrl) { toast('⚠️ 請先設定 GAS URL'); return; }
+        if (!cfg.lineUserId) { toast('⚠️ 請先設定 User ID'); return; }
+        
+        const btn = document.querySelector('.auth-btn.test-line');
+        const status = document.getElementById('testLine_s');
+        
+        btn.disabled = true;
+        btn.textContent = '📤 發送中...';
+        status.textContent = '正在發送測試訊息...';
+        status.className = 'auth-status show info';
+        
+        try {
+            await fetch(cfg.gasUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                body: JSON.stringify({
+                    action: 'testConnection',
+                    userId: cfg.lineUserId
+                }),
+                mode: 'no-cors'
+            });
+            
+            status.textContent = '✅ 已發送！請查看 LINE 訊息';
+            status.className = 'auth-status show ok';
+        } catch (e) {
+            status.textContent = '❌ 發送失敗：' + e.message;
+            status.className = 'auth-status show err';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '📤 發送檢測回報到 LINE';
+            setTimeout(() => status.className = 'auth-status', 5000);
+        }
+    }
+    
+    // ========== Geocoding ==========
+    async function searchGeo(q) {
+        if(!q || q.length<2) { document.getElementById('sug').classList.remove('show'); return; }
+        try {
+            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=zh&format=json`);
+            const d = await r.json();
+            if(d.results?.length) {
+                document.getElementById('sug').innerHTML = d.results.map(x => `
+                    <div class="sug-item" onclick="select(${x.latitude},${x.longitude},'${x.name}','${x.country||''}')">
+                        <div class="sug-city">${x.name}</div>
+                        <div class="sug-country">${x.admin1?x.admin1+', ':''}${x.country||''}</div>
+                        <div class="sug-coords">📍 ${x.latitude.toFixed(4)}°, ${x.longitude.toFixed(4)}°</div>
+                    </div>
+                `).join('');
+                document.getElementById('sug').classList.add('show');
+            } else {
+                document.getElementById('sug').classList.remove('show');
+            }
+        } catch(e) { console.error(e); }
+    }
+    
+    function select(lat, lon, name, country) {
+        document.getElementById('cityInput').value = name;
+        document.getElementById('sug').classList.remove('show');
+        fetchWeather(lat, lon, name, country);
+    }
+    
+    function setApi(api) {
+        currentApi = api;
+        document.querySelectorAll('.api-btn').forEach(b => b.classList.toggle('active', b.dataset.api===api));
+        toast('已切換至 ' + {auto:'自動',meteo:'Open-Meteo',cwa:'氣象署',weatherapi:'WeatherAPI',owm:'OpenWeatherMap'}[api]);
+    }
+    
+    function quick(city) {
+        document.getElementById('cityInput').value = city;
+        const d = QUICK[city];
+        if(d) fetchWeather(d.lat, d.lon, city, d.country);
+    }
+    
+    async function search() {
+        const city = document.getElementById('cityInput').value.trim();
+        if(!city) { toast('⚠️ 請輸入城市'); return; }
+        if(QUICK[city]) { quick(city); return; }
+        
+        showLoad(true, '搜尋城市中...');
+        try {
+            const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`);
+            const d = await r.json();
+            if(d.results?.length) {
+                const x = d.results[0];
+                fetchWeather(x.latitude, x.longitude, x.name, x.country);
+            } else {
+                showLoad(false); toast('❌ 找不到此城市');
+            }
+        } catch(e) { showLoad(false); toast('❌ 搜尋失敗'); }
+    }
+    
+    // ========== 天氣查詢 ==========
+    async function fetchWeather(lat, lon, city, country) {
+        showLoad(true, '取得天氣資料...');
+        document.getElementById('sug').classList.remove('show');
+        
+        try {
+            let data, api = currentApi;
+            
+            if(api === 'auto') {
+                if(country === '台灣' && cfg.cwaKey) api = 'cwa';
+                else if(cfg.owmKey) api = 'owm';
+                else if(cfg.weatherApiKey) api = 'weatherapi';
+                else api = 'meteo';
+            }
+            
+            switch(api) {
+                case 'cwa':
+                    if(!cfg.cwaKey) { api='meteo'; data = await fetchMeteo(lat,lon); }
+                    else data = await fetchCWA(lat, lon, city);
+                    break;
+                case 'owm':
+                    if(!cfg.owmKey) { api='meteo'; data = await fetchMeteo(lat,lon); }
+                    else data = await fetchOWM(lat,lon);
+                    break;
+                case 'weatherapi':
+                    if(!cfg.weatherApiKey) { api='meteo'; data = await fetchMeteo(lat,lon); }
+                    else data = await fetchWAPI(lat,lon);
+                    break;
+                default:
+                    data = await fetchMeteo(lat,lon);
+                    api = 'meteo';
+            }
+            
+            data.city = city;
+            data.country = country;
+            data.lat = lat;
+            data.lon = lon;
+            data.satellite = getSatellite(lon);
+            data.apiSource = {meteo:'Open-Meteo',cwa:'台灣氣象署',owm:'OpenWeatherMap',weatherapi:'WeatherAPI'}[api];
+            data.updateTime = new Date().toLocaleString('zh-TW');
+            data.icon = ICONS[data.condition] || ICONS[data.description] || ICONS.default;
+            
+            currentWeather = data;
+            render(data);
+            updateBg(data.condition);
+        } catch(e) {
+            console.error(e);
+            toast('❌ 查詢失敗: ' + e.message);
+        } finally {
+            showLoad(false);
+        }
+    }
+    
+    async function fetchMeteo(lat, lon) {
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,cloud_cover,visibility&daily=sunrise,sunset&timezone=auto`);
+        if(!r.ok) throw new Error('API 失敗');
+        const d = await r.json();
+        const codes = {0:'Clear',1:'Partly cloudy',2:'Partly cloudy',3:'Cloudy',45:'Fog',48:'Fog',51:'Drizzle',53:'Drizzle',55:'Drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',73:'Snow',75:'Snow',80:'Rain',95:'Thunderstorm'};
+        const c = codes[d.current.weather_code] || 'Clear';
+        return {
+            temp: Math.round(d.current.temperature_2m*10)/10,
+            feels: Math.round(d.current.apparent_temperature*10)/10,
+            condition: c, description: c,
+            humidity: d.current.relative_humidity_2m,
+            wind: Math.round(d.current.wind_speed_10m/3.6*10)/10,
+            visibility: d.current.visibility ? Math.round(d.current.visibility/1000)+'km' : null,
+            clouds: d.current.cloud_cover,
+            sunrise: d.daily.sunrise[0]?.split('T')[1],
+            sunset: d.daily.sunset[0]?.split('T')[1]
+        };
+    }
+    
+    async function fetchCWA(lat, lon, city) {
+        const stations = {'臺北':466920,'台北':466920,'新北':466881,'桃園':467050,'新竹':467571,'臺中':467490,'台中':467490,'彰化':467270,'嘉義':467480,'臺南':467410,'台南':467410,'高雄':467440,'屏東':467590,'宜蘭':467080,'花蓮':466990,'臺東':467660,'台東':467660};
+        const stationId = stations[city] || 466920;
+        const url = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=${cfg.cwaKey}&StationId=${stationId}`;
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('CWA API 失敗');
+        const d = await r.json();
+        if(!d.records?.Station?.[0]) throw new Error('無資料');
+        const s = d.records.Station[0];
+        const we = s.WeatherElement;
+        return {
+            temp: parseFloat(we.AirTemperature) || 0,
+            feels: parseFloat(we.AirTemperature) || 0,
+            condition: we.Weather || 'Clear',
+            description: we.Weather || '晴',
+            humidity: parseFloat(we.RelativeHumidity) || 0,
+            wind: Math.round((parseFloat(we.WindSpeed) || 0)*10)/10,
+            visibility: we.VisibilityDescription || null,
+            clouds: null, sunrise: null, sunset: null
+        };
+    }
+    
+    async function fetchOWM(lat, lon) {
+        const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${cfg.owmKey}&units=metric&lang=zh_tw`);
+        if(!r.ok) throw new Error('OWM API 失敗');
+        const d = await r.json();
+        return {
+            temp: Math.round(d.main.temp*10)/10,
+            feels: Math.round(d.main.feels_like*10)/10,
+            condition: d.weather[0].main,
+            description: d.weather[0].description,
+            humidity: d.main.humidity,
+            wind: Math.round(d.wind.speed*10)/10,
+            visibility: d.visibility ? Math.round(d.visibility/1000)+'km' : null,
+            clouds: d.clouds?.all,
+            sunrise: new Date(d.sys.sunrise*1000).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}),
+            sunset: new Date(d.sys.sunset*1000).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})
+        };
+    }
+    
+    async function fetchWAPI(lat, lon) {
+        const r = await fetch(`https://api.weatherapi.com/v1/current.json?key=${cfg.weatherApiKey}&q=${lat},${lon}&lang=zh`);
+        if(!r.ok) throw new Error('WeatherAPI 失敗');
+        const d = await r.json();
+        return {
+            temp: d.current.temp_c,
+            feels: d.current.feelslike_c,
+            condition: d.current.condition.text,
+            description: d.current.condition.text,
+            humidity: d.current.humidity,
+            wind: Math.round(d.current.wind_kph/3.6*10)/10,
+            visibility: d.current.vis_km+'km',
+            clouds: d.current.cloud,
+            sunrise: null, sunset: null
+        };
+    }
+    
+    function render(d) {
+        document.getElementById('result').innerHTML = `
+            <div class="card weather-main">
+                <div class="w-city">${d.city}</div>
+                <div class="w-country">${d.country||''}</div>
+                <div class="w-icon">${d.icon}</div>
+                <div class="w-temp">${d.temp}<span class="unit">°C</span></div>
+                <div class="w-desc">${d.description}</div>
+                <div class="w-feels">🌡️ 體感 ${d.feels}°C</div>
+            </div>
+            <div class="card">
+                <div class="details">
+                    <div class="detail"><div class="detail-icon">💧</div><div class="detail-label">濕度</div><div class="detail-val">${d.humidity}%</div></div>
+                    <div class="detail"><div class="detail-icon">💨</div><div class="detail-label">風速</div><div class="detail-val">${d.wind} m/s</div></div>
+                    <div class="detail"><div class="detail-icon">👁️</div><div class="detail-label">能見度</div><div class="detail-val">${d.visibility||'--'}</div></div>
+                    <div class="detail"><div class="detail-icon">☁️</div><div class="detail-label">雲量</div><div class="detail-val">${d.clouds!=null?d.clouds+'%':'--'}</div></div>
+                </div>
+            </div>
+            ${d.sunrise&&d.sunset?`
+            <div class="card">
+                <div class="sun-row">
+                    <div class="sun-item"><div class="sun-icon">🌅</div><div class="sun-time">${d.sunrise}</div><div class="sun-label">日出</div></div>
+                    <div class="sun-item"><div class="sun-icon">🌇</div><div class="sun-time">${d.sunset}</div><div class="sun-label">日落</div></div>
+                </div>
+            </div>`:''}
+            <div class="card sat-card">
+                <div class="sat-content">
+                    <div class="sat-header">
+                        <div class="sat-icon">🛰️</div>
+                        <div><div class="sat-title">氣象衛星資訊</div><div class="sat-sub">Weather Satellite</div></div>
+                    </div>
+                    <div class="sat-row"><span class="sat-label">觀測衛星</span><span class="sat-val">${d.satellite.name}</span></div>
+                    <div class="sat-row"><span class="sat-label">營運機構</span><span class="sat-val">${d.satellite.op}</span></div>
+                    <div class="sat-row"><span class="sat-label">衛星位置</span><span class="sat-val">${d.satellite.pos}</span></div>
+                    <div class="sat-row"><span class="sat-label">軌道類型</span><span class="sat-val">${d.satellite.type}</span></div>
+                    <div class="coords">
+                        <div class="coord"><div class="coord-label">緯度</div><div class="coord-val">${d.lat.toFixed(4)}°</div></div>
+                        <div class="coord"><div class="coord-label">經度</div><div class="coord-val">${d.lon.toFixed(4)}°</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="api-src"><span>📡 資料來源：</span><span class="api-badge">${d.apiSource}</span></div>
+            <div class="update-time">🕐 ${d.updateTime}</div>
+            <button class="gen-btn" onclick="generateImage()">🎨 生成天氣圖片</button>
+        `;
+    }
+    
+    function updateBg(cond) {
+        const bg = document.getElementById('bg');
+        bg.className = 'bg';
+        const h = new Date().getHours();
+        const night = h<6 || h>18;
+        if(night) bg.classList.add('night');
+        else if(/Rain|Drizzle|Thunder|雨/i.test(cond)) bg.classList.add('rainy');
+        else if(/Cloud|Overcast|陰|多雲/i.test(cond)) bg.classList.add('cloudy');
+        else if(/Clear|Sunny|晴/i.test(cond)) bg.classList.add('sunny');
+        else bg.classList.add('default');
+    }
+    
+    // ========== 圖片預覽與分享功能 ==========
+    let generatedImageUrl = null;
+    let generatedBase64 = null;
+    
+    async function generateImage() {
+        if (!currentWeather) { toast('⚠️ 請先查詢天氣'); return; }
+        
+        showLoad(true, '🎨 生成精美天氣圖片中...');
+        
+        try {
+            generatedBase64 = await generateWeatherImage(currentWeather);
+            generatedImageUrl = null; // 重置
+            
+            showImagePreview(generatedBase64);
+            toast('✅ 圖片生成完成！');
+        } catch (e) {
+            console.error(e);
+            toast('❌ 生成失敗: ' + e.message);
+        } finally {
+            showLoad(false);
+        }
+    }
+    
+    function showImagePreview(base64) {
+        let panel = document.getElementById('imagePanel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'imagePanel';
+            panel.className = 'image-panel';
+            document.body.appendChild(panel);
+        }
+        
+        panel.innerHTML = `
+            <div class="image-panel-box">
+                <div class="image-panel-header">
+                    <span>🖼️ 天氣圖片預覽</span>
+                    <button class="image-panel-close" onclick="closeImagePanel()">✕</button>
+                </div>
+                <div class="image-preview-wrap">
+                    <img src="${base64}" class="image-preview" alt="天氣圖片">
+                </div>
+                <div class="image-actions">
+                    <button class="img-btn download" onclick="downloadImage()">
+                        <span class="img-btn-icon">📥</span>
+                        <span class="img-btn-text">下載 PNG</span>
+                    </button>
+                    <button class="img-btn share" onclick="shareImage()">
+                        <span class="img-btn-icon">📤</span>
+                        <span class="img-btn-text">系統分享</span>
+                    </button>
+                    <button class="img-btn line" onclick="pushToLine()">
+                        <span class="img-btn-icon">💬</span>
+                        <span class="img-btn-text">推送 LINE</span>
+                    </button>
+                    <button class="img-btn upload" onclick="uploadAndCopy()">
+                        <span class="img-btn-icon">🔗</span>
+                        <span class="img-btn-text">上傳取連結</span>
+                    </button>
+                </div>
+                <div class="image-status" id="imageStatus"></div>
+            </div>
+        `;
+        
+        panel.classList.add('show');
+    }
+    
+    function closeImagePanel() {
+        const panel = document.getElementById('imagePanel');
+        if (panel) panel.classList.remove('show');
+    }
+    
+    // 下載 PNG
+    function downloadImage() {
+        if (!generatedBase64) return;
+        
+        const link = document.createElement('a');
+        const filename = `weather_${currentWeather.city}_${new Date().toISOString().slice(0,10)}.png`;
+        link.download = filename;
+        link.href = generatedBase64;
+        link.click();
+        
+        updateImageStatus('✅ 已下載: ' + filename, 'ok');
+    }
+    
+    // 系統分享
+    async function shareImage() {
+        if (!generatedBase64) return;
+        
+        try {
+            const res = await fetch(generatedBase64);
+            const blob = await res.blob();
+            const file = new File([blob], `weather_${currentWeather.city}.png`, { type: 'image/png' });
+            
+            if (navigator.share && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: `${currentWeather.city} 天氣預報`,
+                    text: `${currentWeather.icon} ${currentWeather.city} ${currentWeather.temp}°C ${currentWeather.description}`,
+                    files: [file]
+                });
+                updateImageStatus('✅ 分享成功！', 'ok');
+            } else if (navigator.share) {
+                await navigator.share({
+                    title: `${currentWeather.city} 天氣預報`,
+                    text: `${currentWeather.icon} ${currentWeather.city} ${currentWeather.temp}°C ${currentWeather.description}\n體感 ${currentWeather.feels}°C | 濕度 ${currentWeather.humidity}%`
+                });
+                updateImageStatus('✅ 已分享文字', 'ok');
+            } else {
+                updateImageStatus('⚠️ 此瀏覽器不支援分享', 'err');
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                updateImageStatus('❌ 分享失敗', 'err');
+            }
+        }
+    }
+    
+    // 上傳並複製連結
+    async function uploadAndCopy() {
+        if (!generatedBase64) return;
+        if (!cfg.imgbbKey) {
+            updateImageStatus('⚠️ 請先設定 ImgBB API Key', 'err');
+            return;
+        }
+        
+        updateImageStatus('⏳ 上傳中...', 'info');
+        
+        try {
+            generatedImageUrl = await uploadToImgBB(generatedBase64);
+            await navigator.clipboard.writeText(generatedImageUrl);
+            updateImageStatus('✅ 已上傳並複製連結！', 'ok');
+        } catch (e) {
+            updateImageStatus('❌ 上傳失敗: ' + e.message, 'err');
+        }
+    }
+    
+    // 推送到 LINE
+    async function pushToLine() {
+        if (!currentWeather) return;
+        if (!cfg.gasUrl) { updateImageStatus('⚠️ 請先設定 GAS URL', 'err'); return; }
+        if (!cfg.lineUserId) { updateImageStatus('⚠️ 請先設定 User ID', 'err'); return; }
+        
+        updateImageStatus('⏳ 推送到 LINE...', 'info');
+        
+        try {
+            await fetch(cfg.gasUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                body: JSON.stringify({
+                    action: 'pushWeather',
+                    weather: currentWeather,
+                    imageBase64: generatedBase64,
+                    userId: cfg.lineUserId
+                }),
+                mode: 'no-cors'
+            });
+            
+            updateImageStatus('✅ 已推送到 LINE！', 'ok');
+        } catch (e) {
+            updateImageStatus('❌ 推送失敗: ' + e.message, 'err');
+        }
+    }
+    
+    function updateImageStatus(msg, type) {
+        const el = document.getElementById('imageStatus');
+        if (el) {
+            el.textContent = msg;
+            el.className = 'image-status show ' + type;
+        }
+    }
+    
+    // ========== 生成精美天氣圖片 ==========
+    async function generateWeatherImage(w) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1200;
+        canvas.height = 630;
+        
+        // 背景漸層
+        const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        bgGrad.addColorStop(0, '#0a0e27');
+        bgGrad.addColorStop(0.5, '#1a1a3e');
+        bgGrad.addColorStop(1, '#0d1b2a');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 電路板紋理
+        ctx.strokeStyle = 'rgba(79, 172, 254, 0.1)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 20; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + (Math.random() - 0.5) * 200, y + (Math.random() - 0.5) * 200);
+            ctx.stroke();
+            // 節點
+            ctx.fillStyle = 'rgba(79, 172, 254, 0.3)';
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 粒子/星星
+        for (let i = 0; i < 50; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 2 + 1;
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.2})`;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 左側衛星
+        drawSatellite(ctx, 80, 100, -0.3);
+        // 右側衛星
+        drawSatellite(ctx, canvas.width - 80, 100, 0.3);
+        
+        // 衛星訊號線
+        ctx.strokeStyle = 'rgba(79, 172, 254, 0.4)';
+        ctx.setLineDash([5, 10]);
+        ctx.lineWidth = 2;
+        // 左衛星到中央
+        ctx.beginPath();
+        ctx.moveTo(120, 130);
+        ctx.lineTo(canvas.width / 2, 200);
+        ctx.stroke();
+        // 右衛星到中央
+        ctx.beginPath();
+        ctx.moveTo(canvas.width - 120, 130);
+        ctx.lineTo(canvas.width / 2, 200);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 主資訊面板
+        const panelX = canvas.width / 2 - 350;
+        const panelY = 150;
+        const panelW = 700;
+        const panelH = 320;
+        
+        // 面板外框發光
+        ctx.shadowColor = '#4facfe';
+        ctx.shadowBlur = 30;
+        ctx.strokeStyle = '#4facfe';
+        ctx.lineWidth = 2;
+        roundRect(ctx, panelX, panelY, panelW, panelH, 20, false, true);
+        
+        // 面板背景
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(10, 20, 40, 0.85)';
+        roundRect(ctx, panelX, panelY, panelW, panelH, 20, true, false);
+        
+        // 面板內框
+        ctx.strokeStyle = 'rgba(79, 172, 254, 0.5)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, panelX + 10, panelY + 10, panelW - 20, panelH - 20, 15, false, true);
+        
+        // 城市名稱
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 72px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#4facfe';
+        ctx.shadowBlur = 20;
+        ctx.fillText(w.city, canvas.width / 2, panelY + 90);
+        ctx.shadowBlur = 0;
+        
+        // 日期
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`;
+        ctx.fillStyle = '#8ec8f8';
+        ctx.font = '28px "Noto Sans TC", sans-serif';
+        ctx.fillText(dateStr, canvas.width / 2, panelY + 140);
+        
+        // 溫度
+        ctx.fillStyle = '#00f2fe';
+        ctx.font = 'bold 56px "Noto Sans TC", sans-serif';
+        ctx.shadowColor = '#00f2fe';
+        ctx.shadowBlur = 15;
+        ctx.fillText(`${w.temp}°C`, canvas.width / 2, panelY + 220);
+        ctx.shadowBlur = 0;
+        
+        // 天氣描述
+        ctx.fillStyle = '#aaddff';
+        ctx.font = '32px "Noto Sans TC", sans-serif';
+        ctx.fillText(w.description, canvas.width / 2, panelY + 275);
+        
+        // 天氣圖示（右上角）
+        ctx.font = '80px sans-serif';
+        ctx.fillText(w.icon, panelX + panelW - 80, panelY + 100);
+        
+        // API 來源標誌（左下角）
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('📡 ' + w.apiSource, panelX + 30, panelY + panelH - 30);
+        
+        // 底部資訊區
+        const infoY = panelY + panelH + 40;
+        
+        // 詳細資訊卡片
+        const cardW = 160;
+        const cardH = 80;
+        const cardGap = 20;
+        const startX = canvas.width / 2 - (cardW * 4 + cardGap * 3) / 2;
+        
+        const infoData = [
+            { icon: '🌡️', label: '體感', value: `${w.feels}°C` },
+            { icon: '💧', label: '濕度', value: `${w.humidity}%` },
+            { icon: '💨', label: '風速', value: `${w.wind}m/s` },
+            { icon: '☁️', label: '雲量', value: w.clouds != null ? `${w.clouds}%` : '--' }
+        ];
+        
+        infoData.forEach((info, i) => {
+            const x = startX + i * (cardW + cardGap);
+            
+            // 卡片背景
+            ctx.fillStyle = 'rgba(79, 172, 254, 0.15)';
+            ctx.strokeStyle = 'rgba(79, 172, 254, 0.4)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, x, infoY, cardW, cardH, 12, true, true);
+            
+            // 圖示
+            ctx.font = '28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(info.icon, x + cardW / 2, infoY + 30);
+            
+            // 數值
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 22px "Noto Sans TC", sans-serif';
+            ctx.fillText(info.value, x + cardW / 2, infoY + 60);
+        });
+        
+        // 衛星資訊
+        ctx.fillStyle = 'rgba(79, 172, 254, 0.8)';
+        ctx.font = '20px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🛰️ ${w.satellite.name}`, canvas.width / 2, infoY + cardH + 40);
+        
+        // 座標
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = '16px monospace';
+        ctx.fillText(`📍 ${w.lat.toFixed(4)}°N, ${w.lon.toFixed(4)}°E`, canvas.width / 2, infoY + cardH + 70);
+        
+        // 更新時間
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.font = '14px "Noto Sans TC", sans-serif';
+        ctx.fillText(`🕐 ${w.updateTime}`, canvas.width / 2, canvas.height - 20);
+        
+        // 如果是雨天，添加雨滴效果
+        if (/Rain|rain|雨|Drizzle/.test(w.description)) {
+            ctx.strokeStyle = 'rgba(150, 200, 255, 0.4)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 100; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const len = Math.random() * 20 + 10;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x - 5, y + len);
+                ctx.stroke();
+            }
+        }
+        
+        return canvas.toDataURL('image/png');
+    }
+    
+    // 繪製衛星
+    function drawSatellite(ctx, x, y, rotation) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        
+        // 衛星本體
+        ctx.fillStyle = '#4facfe';
+        ctx.fillRect(-15, -8, 30, 16);
+        
+        // 太陽能板
+        ctx.fillStyle = '#1a3a5c';
+        ctx.strokeStyle = '#4facfe';
+        ctx.lineWidth = 1;
+        ctx.fillRect(-55, -5, 35, 10);
+        ctx.strokeRect(-55, -5, 35, 10);
+        ctx.fillRect(20, -5, 35, 10);
+        ctx.strokeRect(20, -5, 35, 10);
+        
+        // 太陽能板格線
+        ctx.strokeStyle = 'rgba(79, 172, 254, 0.5)';
+        for (let i = 1; i < 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-55 + i * 7, -5);
+            ctx.lineTo(-55 + i * 7, 5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(20 + i * 7, -5);
+            ctx.lineTo(20 + i * 7, 5);
+            ctx.stroke();
+        }
+        
+        // 天線
+        ctx.strokeStyle = '#4facfe';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 8);
+        ctx.lineTo(0, 25);
+        ctx.stroke();
+        
+        // 訊號波
+        ctx.strokeStyle = 'rgba(79, 172, 254, 0.6)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 3; i++) {
+            ctx.beginPath();
+            ctx.arc(0, 25, i * 8, 0.3 * Math.PI, 0.7 * Math.PI);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    }
+    
+    // 圓角矩形
+    function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        if (fill) ctx.fill();
+        if (stroke) ctx.stroke();
+    }
+    
+    // 上傳到 ImgBB
+    async function uploadToImgBB(base64) {
+        const img = base64.replace(/^data:image\/\w+;base64,/, '');
+        const formData = new FormData();
+        formData.append('key', cfg.imgbbKey);
+        formData.append('image', img);
+        
+        const r = await fetch('https://api.imgbb.com/1/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const d = await r.json();
+        if (d.success) return d.data.url;
+        throw new Error(d.error?.message || '上傳失敗');
+    }
+    
+    function showPage(page, btn) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if(btn) btn.classList.add('active');
+        if(page==='settings') document.getElementById('settings').classList.add('show');
+        else document.getElementById('settings').classList.remove('show');
+    }
+    function closeSetting() { document.getElementById('settings').classList.remove('show'); }
+    
+    function showLoad(show, text) {
+        document.getElementById('loading').classList.toggle('show', show);
+        if(text) document.getElementById('loadingText').textContent = text;
+    }
+    function toast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2500);
+    }
+    </script>
+</body>
+</html>
