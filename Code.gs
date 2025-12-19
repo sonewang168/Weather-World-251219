@@ -1,7 +1,7 @@
 /**
  * 🌍 世界天氣預報 - GAS 中繼站
  * LINE Messaging API（非已停止的 LINE Notify）
- * Token 儲存在 GAS Script Properties
+ * 參考繁中生圖成功架構
  */
 
 // ========== 設定管理 ==========
@@ -67,18 +67,18 @@ input:focus{outline:none;border-color:#0a84ff}
 <div class="hint"><a href="https://developers.line.biz/" target="_blank">LINE Developers</a> → Messaging API → Channel access token</div>
 </div>
 <div class="field">
-<label>預設 User ID</label>
+<label>預設 User ID <span class="req">*必填</span></label>
 <input type="text" id="lineUserId" value="${cfg.lineUserId}">
-<div class="hint">對 Bot 說 /myid 取得，網頁版推送用</div>
+<div class="hint">對 Bot 說 /myid 取得</div>
 </div>
 </div>
 
 <div class="card">
-<h2>☁️ 圖片上傳（選填）</h2>
+<h2>☁️ 圖片上傳</h2>
 <div class="field">
-<label>ImgBB API Key</label>
+<label>ImgBB API Key <span class="req">*推送圖片必填</span></label>
 <input type="password" id="imgbbKey" value="${cfg.imgbbKey}">
-<div class="hint"><a href="https://api.imgbb.com/" target="_blank">取得</a> - 推送圖片用</div>
+<div class="hint"><a href="https://api.imgbb.com/" target="_blank">取得</a> - 免費圖床</div>
 </div>
 </div>
 
@@ -86,17 +86,14 @@ input:focus{outline:none;border-color:#0a84ff}
 <div class="status" id="status"></div>
 
 <div class="card" style="margin-top:16px">
-<h2>📋 Webhook URL（給網頁版用）</h2>
+<h2>📋 Webhook URL</h2>
 <div class="webhook" id="url" onclick="copy()">載入中...</div>
-<div class="hint" style="margin-top:6px">👆 點擊複製</div>
+<div class="hint" style="margin-top:6px">👆 點擊複製，貼到網頁版 GAS URL 欄位</div>
 </div>
 
 <div class="info">
-<h3>✅ 使用 LINE Messaging API</h3>
+<h3>📋 LINE Bot 指令</h3>
 <p>
-本程式使用 <code>api.line.me/v2/bot/message/push</code><br><br>
-⚠️ LINE Notify 已於 2025/3/31 停止服務<br><br>
-📋 Webhook 指令：<br>
 • <code>/myid</code> - 取得 User ID<br>
 • <code>/help</code> - 顯示說明
 </p>
@@ -162,45 +159,55 @@ function handleWebRequest(data) {
   
   // 測試連線
   if (data.action === 'testConnection') {
-    if (!uid) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, err: '缺少 User ID' }));
-    }
-    if (!cfg.lineToken) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, err: 'GAS 未設定 LINE Token' }));
-    }
+    if (!uid) return ContentService.createTextOutput('NO_USER_ID');
+    if (!cfg.lineToken) return ContentService.createTextOutput('NO_TOKEN');
     
-    const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss');
-    push(uid, '🌍 世界天氣預報\n\n✅ LINE 連線成功！\n\n🕐 ' + now, cfg.lineToken);
-    return ContentService.createTextOutput(JSON.stringify({ ok: true }));
+    push(uid, '🌍 世界天氣預報\n\n✅ LINE 連線成功！', cfg.lineToken);
+    return ContentService.createTextOutput('OK');
   }
   
   // 推送天氣
   if (data.action === 'pushWeather') {
-    if (!uid) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, err: '缺少 User ID' }));
-    }
-    if (!cfg.lineToken) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, err: 'GAS 未設定 LINE Token' }));
-    }
+    if (!uid) return ContentService.createTextOutput('NO_USER_ID');
+    if (!cfg.lineToken) return ContentService.createTextOutput('NO_TOKEN');
     
     try {
-      let imageUrl = data.imageUrl;
+      const w = data.weather;
+      const time = Utilities.formatDate(new Date(), 'Asia/Taipei', 'MM/dd HH:mm');
       
-      // 如果傳來 base64，由 GAS 上傳 ImgBB
+      // 組合文字訊息
+      const text = `${w.icon || '🌤️'} ${w.city} 天氣預報
+
+🌡️ 溫度：${w.temp}°C
+🤒 體感：${w.feels}°C
+💧 濕度：${w.humidity}%
+💨 風速：${w.wind} m/s
+☁️ 雲量：${w.clouds}%
+
+📝 ${w.description}
+
+🛰️ ${w.satellite && w.satellite.name ? w.satellite.name : '--'}
+📍 ${w.lat ? w.lat.toFixed(4) : '--'}°, ${w.lon ? w.lon.toFixed(4) : '--'}°
+📡 ${w.apiSource || ''}
+🕐 ${time}`;
+
+      // 如果有圖片，上傳 ImgBB 後發送
       if (data.imageBase64 && cfg.imgbbKey) {
-        imageUrl = uploadImgBB(data.imageBase64, cfg.imgbbKey);
+        const imgUrl = uploadImgBB(data.imageBase64, cfg.imgbbKey);
+        pushWithImage(uid, imgUrl, text, cfg.lineToken);
+      } else {
+        // 純文字
+        push(uid, text, cfg.lineToken);
       }
       
-      const flex = buildWeatherFlex(data.weather, imageUrl);
-      pushFlex(uid, flex, cfg.lineToken);
-      return ContentService.createTextOutput(JSON.stringify({ ok: true }));
+      return ContentService.createTextOutput('OK');
     } catch (err) {
       console.error(err);
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, err: err.message }));
+      return ContentService.createTextOutput('ERROR:' + err.message);
     }
   }
   
-  return ContentService.createTextOutput(JSON.stringify({ ok: true }));
+  return ContentService.createTextOutput('OK');
 }
 
 // ========== LINE Webhook ==========
@@ -210,109 +217,14 @@ function handleLineMsg(ev, cfg) {
   const token = ev.replyToken;
   
   if (txt === '/myid' || txt === '我的id' || txt === 'myid' || txt === 'id') {
-    reply(token, '🆔 你的 User ID：\n\n' + uid + '\n\n📋 請複製到網頁版設定', cfg.lineToken);
+    reply(token, cfg.lineToken, '🆔 你的 User ID：\n\n' + uid + '\n\n📋 請複製到 GAS 設定頁面');
     return;
   }
   
   if (txt === '/help' || txt === '說明' || txt === 'help') {
-    reply(token, '🌍 世界天氣預報\n\n📝 在網頁版查詢天氣後推送到 LINE\n\n📋 指令：\n• /myid - 取得 User ID\n• /help - 顯示說明', cfg.lineToken);
+    reply(token, cfg.lineToken, '🌍 世界天氣預報\n\n📝 在網頁版查詢天氣後推送到 LINE\n\n📋 指令：\n• /myid - 取得 User ID\n• /help - 顯示說明');
     return;
   }
-}
-
-// ========== 建立天氣 Flex ==========
-function buildWeatherFlex(w, imageUrl) {
-  const bubble = {
-    type: 'bubble',
-    size: 'mega',
-    header: {
-      type: 'box',
-      layout: 'vertical',
-      backgroundColor: '#4facfe',
-      paddingAll: '20px',
-      contents: [
-        {
-          type: 'box',
-          layout: 'horizontal',
-          alignItems: 'center',
-          contents: [
-            { type: 'text', text: w.icon || '🌤️', size: 'xxl', flex: 0 },
-            {
-              type: 'box',
-              layout: 'vertical',
-              margin: 'lg',
-              contents: [
-                { type: 'text', text: w.city, size: 'xl', weight: 'bold', color: '#fff' },
-                { type: 'text', text: w.country || '', size: 'sm', color: '#ffffffcc' }
-              ]
-            }
-          ]
-        },
-        { type: 'text', text: w.temp + '°C', size: '3xl', weight: 'bold', color: '#fff', margin: 'lg' },
-        { type: 'text', text: w.description, size: 'md', color: '#ffffffcc' }
-      ]
-    },
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      paddingAll: '20px',
-      contents: [
-        {
-          type: 'box',
-          layout: 'horizontal',
-          contents: [
-            { type: 'box', layout: 'vertical', flex: 1, contents: [
-              { type: 'text', text: '體感', size: 'xs', color: '#8e8e93', align: 'center' },
-              { type: 'text', text: w.feels + '°C', size: 'md', weight: 'bold', align: 'center' }
-            ]},
-            { type: 'box', layout: 'vertical', flex: 1, contents: [
-              { type: 'text', text: '濕度', size: 'xs', color: '#8e8e93', align: 'center' },
-              { type: 'text', text: w.humidity + '%', size: 'md', weight: 'bold', align: 'center' }
-            ]},
-            { type: 'box', layout: 'vertical', flex: 1, contents: [
-              { type: 'text', text: '風速', size: 'xs', color: '#8e8e93', align: 'center' },
-              { type: 'text', text: w.wind + 'm/s', size: 'md', weight: 'bold', align: 'center' }
-            ]}
-          ]
-        },
-        { type: 'separator', margin: 'lg' },
-        {
-          type: 'box',
-          layout: 'vertical',
-          margin: 'lg',
-          contents: [
-            { type: 'text', text: '🛰️ ' + (w.satellite && w.satellite.name ? w.satellite.name : '--'), size: 'sm', color: '#4facfe' },
-            { type: 'text', text: '📍 ' + (w.lat ? w.lat.toFixed(4) : '--') + '°, ' + (w.lon ? w.lon.toFixed(4) : '--') + '°', size: 'xs', color: '#8e8e93', margin: 'sm' }
-          ]
-        }
-      ]
-    },
-    footer: {
-      type: 'box',
-      layout: 'vertical',
-      paddingAll: '12px',
-      backgroundColor: '#f7f7f7',
-      contents: [
-        { type: 'text', text: '📡 ' + (w.apiSource || '') + ' | 🕐 ' + w.updateTime, size: 'xs', color: '#8e8e93', align: 'center' }
-      ]
-    }
-  };
-  
-  if (imageUrl) {
-    bubble.hero = {
-      type: 'image',
-      url: imageUrl,
-      size: 'full',
-      aspectRatio: '1200:630',
-      aspectMode: 'cover'
-    };
-  }
-  
-  return {
-    type: 'flex',
-    altText: (w.icon || '🌤️') + ' ' + w.city + ' ' + w.temp + '°C',
-    contents: bubble
-  };
 }
 
 // ========== ImgBB 上傳 ==========
@@ -329,12 +241,12 @@ function uploadImgBB(base64, key) {
 }
 
 // ========== LINE API ==========
-function reply(token, text, lineToken) {
+function reply(token, lineToken, text) {
   UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'Authorization': 'Bearer ' + lineToken },
-    payload: JSON.stringify({ replyToken: token, messages: [{ type: 'text', text: text }] })
+    payload: JSON.stringify({ replyToken: token, messages: [{ type: 'text', text }] })
   });
 }
 
@@ -343,15 +255,21 @@ function push(uid, text, lineToken) {
     method: 'post',
     contentType: 'application/json',
     headers: { 'Authorization': 'Bearer ' + lineToken },
-    payload: JSON.stringify({ to: uid, messages: [{ type: 'text', text: text }] })
+    payload: JSON.stringify({ to: uid, messages: [{ type: 'text', text }] })
   });
 }
 
-function pushFlex(uid, flex, lineToken) {
+function pushWithImage(uid, imgUrl, text, lineToken) {
   UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'Authorization': 'Bearer ' + lineToken },
-    payload: JSON.stringify({ to: uid, messages: [flex] })
+    payload: JSON.stringify({
+      to: uid,
+      messages: [
+        { type: 'image', originalContentUrl: imgUrl, previewImageUrl: imgUrl },
+        { type: 'text', text: text }
+      ]
+    })
   });
 }
